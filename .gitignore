@@ -9,7 +9,3 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-
-# Large evidence videos (>100 MB, exceeds GitHub's file size limit)
-# Keep Delivery READMEs + screenshots in git; host videos elsewhere
-Deliveries/**/*.mp4
