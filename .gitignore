@@ -2,3 +2,14 @@
 INITIAL_CONTEXT.md
 INITIAL_CONTEX.md
 INSTRUCTIONS.md
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Large evidence videos (>100 MB, exceeds GitHub's file size limit)
+# Keep Delivery READMEs + screenshots in git; host videos elsewhere
+Deliveries/**/*.mp4

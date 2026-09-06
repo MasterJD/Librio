@@ -1,0 +1,192 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infrastructure/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bookly
+
+  consul:
+    image: hashicorp/consul:1.17
+    ports:
+      - "8500:8500"
+    command: agent -dev -client=0.0.0.0
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - bookly
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - bookly
+
+  catalog-svc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nestjs
+      args:
+        SERVICE_NAME: catalog-svc
+        PORT: 8001
+    ports:
+      - "8001:8001"
+    environment:
+      NODE_ENV: production
+      PORT: 8001
+      DATABASE_URL: postgresql://catalog_user:catalog_pass@postgres:5432/catalog_db
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      postgres:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - bookly
+
+  users-svc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nestjs
+      args:
+        SERVICE_NAME: users-svc
+        PORT: 8002
+    ports:
+      - "8002:8002"
+    environment:
+      NODE_ENV: production
+      PORT: 8002
+      DATABASE_URL: postgresql://users_user:users_pass@postgres:5432/users_db
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      postgres:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    networks:
+      - bookly
+
+  transaction-svc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nestjs
+      args:
+        SERVICE_NAME: transaction-svc
+        PORT: 8003
+    ports:
+      - "8003:8003"
+    environment:
+      NODE_ENV: production
+      PORT: 8003
+      DATABASE_URL: postgresql://transaction_user:transaction_pass@postgres:5432/transaction_db
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES}
+      CATALOG_SVC_URL: http://catalog-svc:8001
+      NOTIF_SVC_URL: http://notif-svc:8004
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      postgres:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+      catalog-svc:
+        condition: service_started
+    networks:
+      - bookly
+
+  notif-svc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nestjs
+      args:
+        SERVICE_NAME: notif-svc
+        PORT: 8004
+    ports:
+      - "8004:8004"
+    environment:
+      NODE_ENV: production
+      PORT: 8004
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM}
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      consul:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    networks:
+      - bookly
+
+  library-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nestjs
+      args:
+        SERVICE_NAME: library-mcp
+        PORT: 8000
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: production
+      PORT: 8000
+      CATALOG_SVC_URL: http://catalog-svc:8001
+      TRANSACTION_SVC_URL: http://transaction-svc:8003
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      consul:
+        condition: service_healthy
+      catalog-svc:
+        condition: service_started
+      transaction-svc:
+        condition: service_started
+    networks:
+      - bookly
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    ports:
+      - "80:80"
+    depends_on:
+      - catalog-svc
+      - users-svc
+      - transaction-svc
+    networks:
+      - bookly
+
+networks:
+  bookly:
+    driver: bridge
+
+volumes:
+  postgres_data:

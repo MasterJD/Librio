@@ -1,4 +1,4 @@
-# LibriFlow - Architecture Diagram
+# Bookly - Architecture
 
 ## System Overview
 
@@ -7,7 +7,7 @@ flowchart TB
     User["User Browser"]
     AI["AI Agent"]
 
-    Web["web Angular 4200"]
+    Web["web (Angular)"]
     Mcp["library-mcp 8000"]
 
     Catalog["catalog-svc 8001"]
@@ -29,7 +29,6 @@ flowchart TB
     Mcp --> Catalog
     Mcp --> Transaction
 
-    Transaction --> Users
     Transaction --> Catalog
     Transaction --> Notif
 
@@ -41,7 +40,6 @@ flowchart TB
     Catalog --> Postgres
     Users --> Postgres
     Transaction --> Postgres
-    Notif --> Postgres
     Notif --> Mailpit
 ```
 
@@ -49,20 +47,49 @@ flowchart TB
 
 | Service | Port | Responsibility |
 |---------|------|----------------|
-| catalog-svc | 8001 | Book catalog management |
+| library-mcp | 8000 | MCP Server for AI agents (6 tools) |
+| catalog-svc | 8001 | Book catalog management (CRUD + availability) |
 | users-svc | 8002 | User registration, auth, JWT |
-| transaction-svc | 8003 | Rentals, purchases, library access |
-| notif-svc | 8004 | Notifications, email |
-| library-mcp | 8000 | MCP Server for AI agents |
+| transaction-svc | 8003 | Rentals, purchases, library access, outbox |
+| notif-svc | 8004 | Notifications, email (Mailpit) |
+| web | 4200 (dev) / 80 (Docker) | Angular frontend |
 | consul | 8500 | Service discovery |
-| postgres | 5432 | Database (4 databases) |
+| postgres | 5432 | Database (4 databases, one per service) |
 | mailpit | 8025 | Email capture (dev) |
-| web | 4200 | Frontend |
 
 ## Communication
 
-- **Client → Services**: HTTP/REST
-- **Service → Service**: HTTP via Consul discovery
+- **Client → Services**: HTTP/REST with JWT bearer tokens
+- **Service → Service**: HTTP (transaction-svc → catalog-svc for availability/price)
 - **Service → Consul**: Registration + health checks
-- **AI → MCP**: MCP Protocol
+- **AI → MCP**: REST tools (`/mcp/tools/:name/execute`)
 - **transaction-svc → notif-svc**: With circuit breaker + outbox pattern
+
+## Resilience
+
+- **Circuit breaker** around notif-svc calls: CLOSED → OPEN (3 consecutive failures) → HALF-OPEN (after 30s) → CLOSED
+- **Outbox pattern**: notifications queued in `NotificationOutbox` in the same DB transaction, cron-processed every 5s (PENDING → SENT/FAILED with attempts)
+- **Retry**: exponential backoff (0.5s → 2s, x2 multiplier, jitter)
+
+## Observability
+
+- All services emit structured JSON logs with correlation ID
+- `RequestLoggingMiddleware`: one entry per HTTP call (method, path, status, duration_ms, correlation_id)
+- Controllers log a `payload` object with the actual result data
+- Angular `loggingInterceptor` mirrors `{service, payload}` in the browser console
+- View logs: `docker compose logs -f <service>`
+
+## Database-per-Service
+
+| Database | User | Service |
+|----------|------|---------|
+| `catalog_db` | `catalog_user` | catalog-svc |
+| `users_db` | `users_user` | users-svc |
+| `transaction_db` | `transaction_user` | transaction-svc |
+| `notif_db` | `notif_user` | notif-svc (reserved; notif-svc currently uses in-memory store) |
+
+## Docker
+
+- All services have multi-stage Dockerfiles in `docker/`
+- `docker compose up -d` starts the full 9-container stack
+- Web is served by nginx (port 80) with SPA fallback

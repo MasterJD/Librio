@@ -2,6 +2,8 @@
 
 # Compiled output
 /dist
+/apps/*/dist/
+/apps/*/build/
 /tmp
 /out-tsc
 /bazel-out
@@ -62,6 +64,9 @@ coverage/
 
 # --- Transaction storage (PDF files - private) ---
 apps/transaction-svc/storage/
+
+# --- Local dev scripts (machine-specific paths + dev credentials) ---
+/*.ps1
 
 # --- Context files (project instructions - not part of codebase) ---
 # Ignore all .md files EXCEPT README.md and IMPLEMENTATION_LOG.md

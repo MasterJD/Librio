@@ -113,9 +113,41 @@ flowchart TB
 
 ---
 
-## 4. Services Implemented
+## 4. Infrastructure
 
-### 4.1 Microservices Overview
+### 4.1 Docker Compose Services
+
+| Service | Image | Port(s) | Purpose |
+|---------|-------|---------|---------|
+| PostgreSQL | `postgres:16-alpine` | 5432 | Primary database (4 databases for 4 services) |
+| Consul | `hashicorp/consul:1.17` | 8500 (UI) | Service discovery and configuration |
+| Mailpit | `axllent/mailpit` | 1025 (SMTP), 8025 (UI) | Email testing/dev |
+
+### 4.2 Database Architecture
+
+| Database | User | Service |
+|----------|------|---------|
+| `catalog_db` | `catalog_user` | catalog-svc |
+| `users_db` | `users_user` | users-svc |
+| `transaction_db` | `transaction_user` | transaction-svc |
+| `notif_db` | `notif_user` | notif-svc |
+
+### 4.3 Seed Data (catalog_db)
+
+6 sample books: Dune, Foundation, Clean Code, The Pragmatic Programmer, 1984, The Hobbit
+
+### 4.4 How to Start
+
+```bash
+cd Librio/bookly
+docker compose up -d
+```
+
+---
+
+## 5. Services Implemented
+
+### 5.1 Microservices Overview
 
 | Service | Port | Package | Description |
 |---------|------|---------|-------------|
@@ -125,13 +157,13 @@ flowchart TB
 | transaction-svc | 8003 | `@bookly/transaction-svc` | Rentals, purchases, library access |
 | notif-svc | 8004 | `@bookly/notif-svc` | Notifications, email |
 
-### 4.2 Each Service Returns
+### 5.2 Each Service Returns
 
 ```json
 GET / → { "status": "ok", "service": "<service-name>" }
 ```
 
-### 4.3 Evidence — Service Endpoints
+### 5.3 Evidence — Service Endpoints
 
 #### catalog-svc (port 8001)
 ![catalog-svc](catalog-svc.png)
@@ -148,23 +180,30 @@ GET / → { "status": "ok", "service": "<service-name>" }
 #### library-mcp (port 8000)
 ![library-mcp](library-mcp.png)
 
-### 4.4 Video Evidence
+### 5.4 Video Evidence
 
 See [evidence.mp4](evidence.mp4) for a live demo of all services responding.
 
 ---
 
-## 5. Project Structure
+## 6. Project Structure
 
 ```
 bookly/
 ├── package.json                 # Root package.json (monorepo scripts)
 ├── pnpm-workspace.yaml          # Workspace: apps/*, agents/*, packages/*
-├── .gitignore
+├── docker-compose.yml           # Docker infrastructure (PostgreSQL, Consul, Mailpit)
+├── .env                         # Active environment variables
 ├── .env.example                 # Environment variable template
+├── .gitignore
 ├── angular.json                 # Angular CLI config
 ├── tsconfig.json                # Root TypeScript config
 ├── IMPLEMENTATION_LOG.md        # Implementation tracking
+│
+├── infrastructure/              # Docker infrastructure configs
+│   └── postgres/
+│       ├── init.sql             # Creates 4 databases + users
+│       └── seed.sql             # Sample book data for catalog_db
 │
 ├── apps/                        # Microservices
 │   ├── catalog-svc/             # NestJS app (port 8001)
@@ -194,16 +233,16 @@ bookly/
 
 ---
 
-## 6. What Was Implemented (Delivery 1)
+## 7. What Was Implemented (Delivery 1)
 
-### 6.1 Monorepo Setup
+### 7.1 Monorepo Setup
 
 - **Root `package.json`** with pnpm workspace scripts for all services
 - **`pnpm-workspace.yaml`** defining `apps/*`, `agents/*`, `packages/*`
 - **`.gitignore`** for Node.js, Docker, env files, IDE, coverage, and context docs
 - **`.env.example`** with all required environment variables
 
-### 6.2 Shared Configurations (`packages/config/`)
+### 7.2 Shared Configurations (`packages/config/`)
 
 | File | Purpose |
 |------|---------|
@@ -211,7 +250,7 @@ bookly/
 | `typescript/base.json` | Shared TypeScript config (strict null checks, decorator support) |
 | `prettier/.prettierrc` | Consistent code formatting rules |
 
-### 6.3 Shared Types (`packages/shared/types/`)
+### 7.3 Shared Types (`packages/shared/types/`)
 
 | Type | Description |
 |------|-------------|
@@ -219,24 +258,24 @@ bookly/
 | `Book`, `CreateBookDto`, `UpdateBookDto`, `BookAvailability` | Book catalog |
 | `Rental`, `Purchase`, `CreateRentalDto`, `CreatePurchaseDto`, `LibraryEntry` | Transactions |
 
-### 6.4 Shared Constants (`packages/shared/constants/`)
+### 7.4 Shared Constants (`packages/shared/constants/`)
 
 - **`PORTS`** — All service port mappings (catalog: 8001, users: 8002, etc.)
 - **`EVENTS`** — Notification event types (RENTAL_CREATED, PURCHASE_COMPLETED, etc.)
 
-### 6.5 Shared Utilities (`packages/shared/utils/`)
+### 7.5 Shared Utilities (`packages/shared/utils/`)
 
 - **`Correlation ID`** — UUID generation and header extraction for request tracing
 - **`StructuredLogger`** — JSON logging class with timestamp, level, service, event, and correlation_id
 
-### 6.6 API Contracts (`packages/contracts/`)
+### 7.6 API Contracts (`packages/contracts/`)
 
 - **Auth** — RegisterRequest, LoginRequest, AuthResponse, UserProfile
 - **Books** — Book, CreateBookRequest, SearchBooksQuery, BookAvailabilityResponse
 - **Transactions** — Rental, Purchase, LibraryEntry, BookAccessResponse
 - **Notifications** — NotificationType, CreateNotificationRequest, NotificationResponse
 
-### 6.7 Placeholder Microservices
+### 7.7 Placeholder Microservices
 
 5 NestJS applications created under `apps/`, each with:
 - Minimal NestJS bootstrap (`main.ts`, `app.module.ts`)
@@ -246,9 +285,9 @@ bookly/
 
 ---
 
-## 7. How to Test
+## 8. How to Test
 
-### 7.1 Prerequisites
+### 8.1 Prerequisites
 
 ```bash
 # Install pnpm (if not installed)
@@ -259,7 +298,7 @@ cd bookly
 pnpm install
 ```
 
-### 7.2 Run Individual Services
+### 8.2 Run Individual Services
 
 ```bash
 # Each in a separate terminal
@@ -270,7 +309,7 @@ pnpm dev:notif         # → http://localhost:8004
 pnpm dev:mcp           # → http://localhost:8000
 ```
 
-### 7.3 Verify Endpoints
+### 8.3 Verify Endpoints
 
 ```bash
 # PowerShell
@@ -281,7 +320,7 @@ Invoke-WebRequest http://localhost:8001
 Start-Process http://localhost:8001
 ```
 
-### 7.4 Run Angular Frontend
+### 8.4 Run Angular Frontend
 
 ```bash
 npm start              # → http://localhost:4200
@@ -289,7 +328,7 @@ npm start              # → http://localhost:4200
 
 ---
 
-## 8. Key Decisions
+## 9. Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|

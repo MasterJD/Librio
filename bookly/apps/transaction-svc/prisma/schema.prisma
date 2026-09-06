@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Rental {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  bookId    Int
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("rentals")
+}
+
+model Purchase {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  bookId    Int
+  price     Decimal  @db.Decimal(10, 2)
+  status    String   @default("COMPLETED")
+  createdAt DateTime @default(now())
+
+  @@map("purchases")
+}
+
+model NotificationOutbox {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  rentalId   Int?
+  purchaseId Int?
+  eventType  String
+  payload    Json
+  status     String   @default("PENDING")
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("notification_outbox")
+}

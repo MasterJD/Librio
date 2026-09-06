@@ -1,0 +1,51 @@
+FROM node:20-alpine AS base
+RUN apk add --no-cache openssl
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/config/ ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+ARG SERVICE_NAME
+COPY apps/${SERVICE_NAME}/package.json ./apps/${SERVICE_NAME}/
+RUN pnpm install --no-frozen-lockfile
+
+# Build shared
+FROM deps AS build-shared
+COPY packages/config/ ./packages/config/
+COPY packages/shared/ ./packages/shared/
+RUN cd packages/shared && pnpm build
+
+# Build service
+FROM build-shared AS build-service
+ARG SERVICE_NAME
+COPY apps/${SERVICE_NAME}/ ./apps/${SERVICE_NAME}/
+RUN mkdir -p /tmp/prisma-client && if [ -f apps/${SERVICE_NAME}/prisma/schema.prisma ]; then cd apps/${SERVICE_NAME} && npx prisma generate && cp -R /app/node_modules/.prisma/client/. /tmp/prisma-client/; fi
+RUN cd apps/${SERVICE_NAME} && pnpm build
+
+# Production
+FROM node:20-alpine AS production
+RUN apk add --no-cache openssl
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+ARG SERVICE_NAME
+ENV SERVICE_NAME=${SERVICE_NAME}
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/config/ ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/${SERVICE_NAME}/package.json ./apps/${SERVICE_NAME}/
+
+RUN pnpm install --no-frozen-lockfile --prod
+
+COPY --from=build-shared /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build-service /app/apps/${SERVICE_NAME}/dist ./apps/${SERVICE_NAME}/dist
+COPY --from=build-service /tmp/prisma-client /app/node_modules/.prisma/client
+COPY --from=build-service /app/apps/${SERVICE_NAME}/package.json ./apps/${SERVICE_NAME}/package.json
+
+ARG PORT=3000
+EXPOSE ${PORT}
+
+CMD ["sh", "-c", "cd apps/$SERVICE_NAME && node dist/main.js"]
