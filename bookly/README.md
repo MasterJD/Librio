@@ -36,7 +36,11 @@ Digital library platform built with a microservices architecture. Users browse a
 | users-svc | 8002 | Registration, login, JWT auth, profiles |
 | transaction-svc | 8003 | Rentals, purchases, merged library, outbox processor |
 | notif-svc | 8004 | Notifications + email (Handlebars templates → Mailpit) |
-| library-mcp | 8000 | MCP server: 6 tools for AI agents (REST) |
+| library-mcp | 8000 | MCP server: 8 tools for AI agents (REST) |
+| orchestrator-agent | 9000 | A2A orchestrator: instruction parsing + delegation |
+| catalog-agent | 9001 | A2A: search_books, get_book |
+| transaction-agent | 9002 | A2A: create_rental, purchase_book, return_book, get_my_library |
+| notification-agent | 9003 | A2A: send_notification, get_notification_history |
 | web | 4200 dev / 80 Docker | Angular + Material frontend |
 
 ## Endpoints
@@ -98,7 +102,7 @@ Digital library platform built with a microservices architecture. Users browse a
 | GET | /mcp/capabilities | Capabilities |
 | GET | /healthz, /readyz | Health / readiness |
 
-MCP tools: `search_books`, `get_book`, `create_rental`, `purchase_book`, `return_book`, `get_my_library`
+MCP tools: `search_books`, `get_book`, `create_rental`, `purchase_book`, `return_book`, `get_my_library`, `send_notification`, `get_notification_history`
 
 ## Environment Variables
 
@@ -215,6 +219,48 @@ curl -X POST http://localhost:8000/mcp/tools/create_rental/execute \
   -H "Content-Type: application/json" \
   -d '{"params":{"bookId":1,"durationDays":7,"authToken":"<jwt>"}}'
 ```
+
+## Agent-to-Agent (A2A)
+
+4 specialized agents orchestrated by `orchestrator-agent` (9000) using Google's A2A model: agent discovery via **Agent Cards** at `/.well-known/agent.json` and task delegation via JSON-RPC (`POST /a2a/tasks/send`).
+
+```
+User: "Buy Dune and notify me"
+  └─► orchestrator-agent (9000)  discovers agents via agent.json cards
+        ├─► catalog-agent (9001)     search_books  ──► library-mcp ──► catalog-svc
+        ├─► transaction-agent (9002) purchase_book ──► library-mcp ──► transaction-svc
+        └─► notification-agent (9003) send_notification ──► library-mcp ──► notif-svc
+```
+
+Agents never call services directly — they always go through library-mcp tools.
+
+### How to test
+
+```bash
+# 1. See the registry (all discovered Agent Cards)
+curl http://localhost:9000/agents
+
+# 2. Read one Agent Card
+curl http://localhost:9001/.well-known/agent.json
+
+# 3. Get a JWT (users-svc)
+curl -X POST http://localhost:8002/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@bookly.io","password":"Test1234!"}'
+
+# 4. Give a natural-language instruction (Spanish or English)
+curl -X POST http://localhost:9000/orchestrate \
+  -H "Content-Type: application/json" \
+  -d '{"instruction":"Buy Dune and notify me","authToken":"<jwt>"}'
+
+# More examples (tested): 
+#   "renta Foundation"          → creates rental
+#   "devolver Foundation"       → returns that rental
+#   "buscar libros de fantasia" → genre search
+#   "compra The Hobbit y notificame" → purchase + notification
+```
+
+Supported intents (EN/ES): SEARCH (buscar/search), RENT (renta/alquilar/rent), PURCHASE (compra/buy), RETURN (devolver/return), NOTIFY (notifica/notify). Genres are auto-detected (fantasia→fantasy, ciencia ficcion→science-fiction, misterio→mystery, etc.).
 
 ## Resilience
 

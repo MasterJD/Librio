@@ -1,0 +1,37 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/config/ ./packages/config/
+ARG AGENT_NAME
+COPY agents/${AGENT_NAME}/package.json ./agents/${AGENT_NAME}/
+RUN pnpm install --no-frozen-lockfile
+
+# Build agent
+FROM deps AS build-agent
+ARG AGENT_NAME
+COPY agents/${AGENT_NAME}/ ./agents/${AGENT_NAME}/
+RUN cd agents/${AGENT_NAME} && pnpm build
+
+# Production
+FROM node:20-alpine AS production
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+ARG AGENT_NAME
+ENV AGENT_NAME=${AGENT_NAME}
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY packages/config/ ./packages/config/
+COPY agents/${AGENT_NAME}/package.json ./agents/${AGENT_NAME}/
+
+RUN pnpm install --no-frozen-lockfile --prod
+
+COPY --from=build-agent /app/agents/${AGENT_NAME}/dist ./agents/${AGENT_NAME}/dist
+
+ARG PORT=9000
+EXPOSE ${PORT}
+
+CMD ["sh", "-c", "cd agents/$AGENT_NAME && node dist/main.js"]

@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const CATALOG_SVC_URL = process.env.CATALOG_SVC_URL || 'http://localhost:8001';
 const TRANSACTION_SVC_URL = process.env.TRANSACTION_SVC_URL || 'http://localhost:8003';
+const NOTIF_SVC_URL = process.env.NOTIF_SVC_URL || 'http://localhost:8004';
 
 export interface Tool {
   name: string;
@@ -138,6 +139,56 @@ export const getMyLibraryTool: Tool = {
   },
 };
 
+export const sendNotificationTool: Tool = {
+  name: 'send_notification',
+  description: 'Send a notification to a user (email via notif-svc).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      userId: { type: 'number', description: 'The user ID to notify' },
+      type: {
+        type: 'string',
+        description: 'Notification type: RENTAL_CREATED, RENTAL_RETURNED, RENTAL_EXPIRING, PURCHASE_CONFIRMATION, WELCOME',
+      },
+      subject: { type: 'string', description: 'Email subject' },
+      message: { type: 'string', description: 'Email body text' },
+      rentalId: { type: 'number', description: 'Optional rental ID' },
+      purchaseId: { type: 'number', description: 'Optional purchase ID' },
+    },
+    required: ['userId', 'type', 'subject', 'message'],
+  },
+  handler: async (params: {
+    userId: number;
+    type: string;
+    subject: string;
+    message: string;
+    rentalId?: number;
+    purchaseId?: number;
+  }) => {
+    const response = await axios.post(`${NOTIF_SVC_URL}/notifications`, params);
+    return response.data;
+  },
+};
+
+export const getNotificationHistoryTool: Tool = {
+  name: 'get_notification_history',
+  description: 'Get the notification history for a user.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      userId: { type: 'number', description: 'The user ID' },
+    },
+    required: ['userId'],
+  },
+  handler: async (params: { userId: number }) => {
+    const response = await axios.get(`${NOTIF_SVC_URL}/notifications/users/${params.userId}`);
+    return {
+      notifications: response.data,
+      count: response.data.length,
+    };
+  },
+};
+
 export const allTools: Tool[] = [
   searchBooksTool,
   getBookTool,
@@ -145,4 +196,6 @@ export const allTools: Tool[] = [
   purchaseBookTool,
   returnBookTool,
   getMyLibraryTool,
+  sendNotificationTool,
+  getNotificationHistoryTool,
 ];

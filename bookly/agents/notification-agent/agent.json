@@ -1,0 +1,9 @@
+{
+  "name": "Bookly Notification Agent",
+  "description": "Agente especializado en enviar notificaciones",
+  "url": "http://notification-agent:9003",
+  "skills": [
+    { "id": "send_notification", "name": "send_notification", "description": "Envía una notificación al usuario" },
+    { "id": "get_notification_history", "name": "get_notification_history", "description": "Obtiene el historial de notificaciones de un usuario" }
+  ]
+}

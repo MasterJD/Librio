@@ -43,7 +43,7 @@ export class LibraryController {
   ) {
     const result = await this.libraryService.getBookAccess(req.user.id, bookId);
     this.logger.log('Getting book access', correlationId, {
-      payload: { userId: req.user.id, bookId, ...result },
+      payload: { ...result, userId: req.user.id, bookId },
     });
     return result;
   }

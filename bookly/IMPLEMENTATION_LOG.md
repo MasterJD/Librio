@@ -821,3 +821,80 @@ Follow-up enhancements after the core sections:
 - CORS preflight `OPTIONS /books` → `204` with `Allow-Origin: http://localhost:4200`
 - `docker compose ps` → 9 containers up (postgres, consul, mailpit, 5 services, web)
 - End-to-end flow: register → login → rent (Dune) → library shows RENTED → MCP capabilities (6 tools)
+
+---
+
+## SECTION 11: A2A Agents (Agent-to-Agent)
+
+**Date:** 2026-09-13
+**Status:** Completed
+
+### What was done
+Implemented the A2A (Agent-to-Agent, Google protocol) layer: 4 specialized NestJS agents that discover each other via Agent Cards (`/.well-known/agent.json`) and delegate tasks using JSON-RPC A2A tasks (`POST /a2a/tasks/send`). Agents call services exclusively through library-mcp tools.
+
+### Agents Created
+
+| Agent | Port | Skills | Delegates to |
+|-------|------|--------|--------------|
+| catalog-agent | 9001 | search_books, get_book | library-mcp → catalog-svc |
+| transaction-agent | 9002 | create_rental, purchase_book, return_book, get_my_library | library-mcp → transaction-svc |
+| notification-agent | 9003 | send_notification, get_notification_history | library-mcp → notif-svc |
+| orchestrator-agent | 9000 | process_instruction (natural-language orchestration) | catalog/transaction/notification agents |
+
+### Files Created
+
+| File | Description |
+|------|-------------|
+| `agents/<agent>/agent.json` | Published Agent Card (name, description, url, skills) |
+| `agents/<agent>/src/agent-card/agent-card.controller.ts` | Serves card at `GET /.well-known/agent.json` |
+| `agents/<agent>/src/a2a/a2a.controller.ts` | A2A JSON-RPC endpoint: `POST /a2a/tasks/send` |
+| `agents/<agent>/src/a2a/a2a.service.ts` | Skill registry + dispatch (specialist agents) |
+| `agents/<agent>/src/library/library-client.service.ts` | Calls library-mcp REST tools |
+| `agents/orchestrator-agent/src/orchestrate/orchestrate.service.ts` | Intent parsing (ES/EN keywords), book/genre lookup, multi-agent delegation |
+| `agents/orchestrator-agent/src/discovery/agent-discovery.service.ts` | Agent registry: fetches all Agent Cards |
+| `agents/orchestrator-agent/src/a2a/a2a-client.service.ts` | A2A client (tasks/send to specialist agents) |
+| `docker/Dockerfile.agent` | Multi-stage build for agents |
+| `docker-compose.yml` | 4 agent services (9000-9003), `NOTIF_SVC_URL` for library-mcp |
+
+### library-mcp Additions
+
+2 new tools (6 → 8): `send_notification`, `get_notification_history` — keeps the invariant that agents only talk to the MCP layer.
+
+### A2A Protocol (subset)
+
+```
+POST /a2a/tasks/send
+{ "jsonrpc": "2.0", "id": "task-1", "method": "tasks/send",
+  "params": { "taskId": "task-1",
+              "message": { "role": "user",
+                           "parts": [{ "text": "purchase_book|{\"bookId\":1}" }] } } }
+
+→ { "jsonrpc": "2.0", "id": "task-1",
+    "result": { "taskId": "task-1", "status": "completed",
+                "artifacts": [{ "parts": [{ "text": "{...result...}" }] }] } }
+```
+
+### Orchestrator Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /orchestrate | `{instruction, authToken?}` → parses intent, delegates, aggregates results |
+| GET | /agents | Lists all discovered Agent Cards (registry view) |
+| GET | /.well-known/agent.json | Orchestrator card |
+
+### Test Results (all verified running)
+
+| Instruction | Intents | Result |
+|-------------|---------|--------|
+| `Buy Dune and notify me` | PURCHASE, NOTIFY | Dune found (id=1) → purchase COMPLETED ($12.99) → PURCHASE_CONFIRMATION notification sent |
+| `renta Foundation` | RENT | Rental created (ACTIVE, 14 days) |
+| `devolver Foundation` | RETURN | Rental matched by fuzzy title → RETURNED |
+| `buscar libros de fantasia` | SEARCH | 4 fantasy books returned (genre detected) |
+| `compra The Hobbit y notificame` | PURCHASE, NOTIFY | Purchase COMPLETED + notification |
+
+### Security
+- JWT tokens are **redacted** in all agent/Orchestrator/MCP logs (`authToken: "***"`)
+
+### Deviations from Section 11 spec
+- `get_my_library` added to transaction-agent (needed for return-by-title flow)
+- Real Google A2A spec uses full Task/Message/Artifact types over streamable HTTP; this is a documented JSON-RPC subset sufficient for the teacher's demo analogy (discovery via Agent Cards, delegation via A2A)

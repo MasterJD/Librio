@@ -1,0 +1,12 @@
+{
+  "name": "Bookly Orchestrator Agent",
+  "description": "Coordina agentes especializados para procesar instrucciones del usuario",
+  "url": "http://orchestrator-agent:9000",
+  "skills": [
+    {
+      "id": "process_instruction",
+      "name": "Procesar instrucción",
+      "description": "Recibe una instrucción en lenguaje natural y la delega al agente apropiado"
+    }
+  ]
+}

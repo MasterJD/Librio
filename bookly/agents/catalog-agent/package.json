@@ -1,0 +1,25 @@
+{
+  "name": "@bookly/catalog-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "tsc",
+    "start": "node dist/main",
+    "start:prod": "node dist/main"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.3.0",
+    "@nestjs/core": "^10.3.0",
+    "@nestjs/platform-express": "^10.3.0",
+    "axios": "^1.6.0",
+    "reflect-metadata": "^0.2.1",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.3.0",
+    "@nestjs/schematics": "^10.1.0",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.0"
+  }
+}

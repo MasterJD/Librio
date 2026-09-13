@@ -47,15 +47,33 @@ flowchart TB
 
 | Service | Port | Responsibility |
 |---------|------|----------------|
-| library-mcp | 8000 | MCP Server for AI agents (6 tools) |
+| library-mcp | 8000 | MCP Server for AI agents (8 tools) |
 | catalog-svc | 8001 | Book catalog management (CRUD + availability) |
 | users-svc | 8002 | User registration, auth, JWT |
 | transaction-svc | 8003 | Rentals, purchases, library access, outbox |
 | notif-svc | 8004 | Notifications, email (Mailpit) |
+| orchestrator-agent | 9000 | A2A orchestrator: parses instructions, delegates |
+| catalog-agent | 9001 | A2A catalog skills (search_books, get_book) |
+| transaction-agent | 9002 | A2A transaction skills (rental, purchase, return) |
+| notification-agent | 9003 | A2A notification skills (send, history) |
 | web | 4200 (dev) / 80 (Docker) | Angular frontend |
 | consul | 8500 | Service discovery |
 | postgres | 5432 | Database (4 databases, one per service) |
 | mailpit | 8025 | Email capture (dev) |
+
+## A2A (Agent-to-Agent)
+
+```
+User instruction ("Buy Dune and notify me")
+  └─► orchestrator-agent (9000) — parses intent, discovers agents via Agent Cards
+        ├─► catalog-agent (9001)   — search_books    ──► library-mcp ──► catalog-svc
+        ├─► transaction-agent (9002)— purchase_book  ──► library-mcp ──► transaction-svc
+        └─► notification-agent (9003) — send_notification ──► library-mcp ──► notif-svc
+```
+
+- Each agent publishes an **Agent Card** at `/.well-known/agent.json` (name, description, skills)
+- Orchestrator discovers cards (`GET /agents`) and delegates via A2A JSON-RPC (`POST /a2a/tasks/send`)
+- Agents never call services directly — always through library-mcp tools
 
 ## Communication
 
@@ -63,6 +81,8 @@ flowchart TB
 - **Service → Service**: HTTP (transaction-svc → catalog-svc for availability/price)
 - **Service → Consul**: Registration + health checks
 - **AI → MCP**: REST tools (`/mcp/tools/:name/execute`)
+- **Agent → Agent**: A2A protocol (Agent Cards + JSON-RPC `tasks/send`)
+- **Agent → Services**: exclusively via library-mcp tools
 - **transaction-svc → notif-svc**: With circuit breaker + outbox pattern
 
 ## Resilience

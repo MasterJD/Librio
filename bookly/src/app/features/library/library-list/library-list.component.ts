@@ -9,6 +9,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TransactionService, LibraryEntry } from '../../../core/services/transaction.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
+const DUMMY_PDF_URL = 'https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf';
+
 @Component({
   selector: 'app-library-list',
   standalone: true,
@@ -49,9 +51,12 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
                     <mat-icon>assignment_return</mat-icon> Return
                   </button>
                 }
-                <button mat-raised-button color="primary" (click)="accessBook(item.id)">
-                  <mat-icon>visibility</mat-icon> View
+                <button mat-raised-button color="primary" (click)="readBook(item)">
+                  <mat-icon>menu_book</mat-icon> Read
                 </button>
+                <a mat-stroked-button [href]="getPdfUrl(item)" target="_blank">
+                  <mat-icon>download</mat-icon> Download
+                </a>
               </mat-card-actions>
             </mat-card>
           }
@@ -112,6 +117,16 @@ export class LibraryListComponent implements OnInit {
     });
   }
 
+  getPdfUrl(item: LibraryEntry): string {
+    return item.pdfUrl || DUMMY_PDF_URL;
+  }
+
+  readBook(item: LibraryEntry) {
+    const pdfUrl = this.getPdfUrl(item);
+    window.open(pdfUrl, '_blank', 'noopener');
+    this.snackBar.open(`Opening "${item.title}"...`, 'Close', { duration: 2000 });
+  }
+
   returnBook(rentalId: number) {
     this.transactionService.returnBook(rentalId).subscribe({
       next: () => {
@@ -119,15 +134,6 @@ export class LibraryListComponent implements OnInit {
         this.ngOnInit();
       },
       error: (err) => this.snackBar.open(err.error?.message || 'Return failed', 'Close', { duration: 3000 }),
-    });
-  }
-
-  accessBook(bookId: number) {
-    this.transactionService.getBookAccess(bookId).subscribe({
-      next: (access) => {
-        this.snackBar.open(`Access type: ${access.accessType}`, 'Close', { duration: 2000 });
-      },
-      error: () => this.snackBar.open('Access denied', 'Close', { duration: 3000 }),
     });
   }
 }

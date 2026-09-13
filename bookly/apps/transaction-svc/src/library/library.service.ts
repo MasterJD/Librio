@@ -68,12 +68,31 @@ export class LibraryService {
       throw new NotFoundException('You do not have access to this book');
     }
 
+    // Fetch book details from catalog-svc to get the PDF URL
+    const catalogUrl = process.env.CATALOG_SVC_URL || 'http://localhost:8001';
+    let pdfUrl: string | null = null;
+    try {
+      const response = await fetch(`${catalogUrl}/books/${bookId}`);
+      if (response.ok) {
+        const book = await response.json();
+        pdfUrl = book.pdfUrl || null;
+      }
+    } catch (error) {
+      // Book details unavailable - pdfUrl stays null
+    }
+
+    // Fallback: dummy PDF so the demo always has a readable file
+    if (!pdfUrl) {
+      pdfUrl = 'https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf';
+    }
+
     // Generate temporary signed URL (placeholder - in real app would use S3 signed URLs)
     const expiresInSeconds = rental ? Math.floor((rental.expiresAt.getTime() - Date.now()) / 1000) : 3600;
 
     return {
       bookId,
       accessType: purchase ? 'PURCHASED' : 'RENTED',
+      pdfUrl,
       downloadUrl: `/api/books/${bookId}/download?token=placeholder&expires=${Date.now() + expiresInSeconds * 1000}`,
       expiresAt: rental?.expiresAt || null,
     };

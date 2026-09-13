@@ -42,3 +42,6 @@ INSERT INTO books (title, author, genre, isbn, description, price, "availableCop
 ('Animal Farm', 'George Orwell', 'dystopian', '9780451526342', 'A satirical fable about a group of farm animals.', 8.99, 11, 11, NOW(), NOW()),
 ('A Game of Thrones', 'George R.R. Martin', 'fantasy', '9780553593716', 'Noble families fight for control of the Iron Throne.', 13.99, 5, 5, NOW(), NOW()),
 ('The Selfish Gene', 'Richard Dawkins', 'non-fiction', '9780198788607', 'The gene-centered view of evolution explained.', 12.99, 4, 4, NOW(), NOW());
+
+-- Dummy PDF for all books (in-app reading / download demo)
+UPDATE books SET "pdfUrl" = 'https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf' WHERE "pdfUrl" IS NULL OR "pdfUrl" = '';

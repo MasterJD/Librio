@@ -25,8 +25,10 @@ export class ToolsController {
     @Headers('x-correlation-id') correlationId?: string,
   ) {
     const result = await this.toolsService.executeTool(name, body.params || {});
+    const sanitized = { ...(body.params || {}) };
+    if (sanitized.authToken) sanitized.authToken = '***';
     this.logger.log('MCP tool executed', correlationId, {
-      payload: { tool: name, params: body.params || {}, result },
+      payload: { tool: name, params: sanitized, result },
     });
     return result;
   }

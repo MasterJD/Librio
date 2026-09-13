@@ -1,0 +1,9 @@
+{
+  "name": "Bookly Catalog Agent",
+  "description": "Agente especializado en buscar y consultar libros",
+  "url": "http://catalog-agent:9001",
+  "skills": [
+    { "id": "search_books", "name": "search_books", "description": "Busca libros por título, autor o género" },
+    { "id": "get_book", "name": "get_book", "description": "Obtiene el detalle de un libro específico" }
+  ]
+}

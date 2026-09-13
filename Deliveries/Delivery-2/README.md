@@ -2,7 +2,7 @@
 
 **Bookly** is a digital library platform built with a microservices architecture. This delivery moves the project from placeholders to a fully functional system: four real backend microservices, an MCP server for AI agents, resilience patterns (circuit breaker + outbox), structured JSON logging with correlation IDs, an Angular frontend with Material Design, and complete Docker configuration for the whole stack.
 
-The system is designed as a learning project demonstrating key microservice patterns: direct service-to-service communication (no API Gateway), Database-per-Service, service discovery with Consul, resilience patterns (circuit breaker, outbox, retry), structured logging with correlation IDs, AI integration via MCP, and agent coordination via A2A (planned for a later delivery).
+The system is designed as a learning project demonstrating key microservice patterns: direct service-to-service communication (no API Gateway), Database-per-Service, service discovery with Consul, resilience patterns (circuit breaker, outbox, retry), structured logging with correlation IDs, AI integration via MCP, and agent coordination via A2A (Agent Cards + task delegation).
 
 ---
 
@@ -222,10 +222,86 @@ MCP (Model Context Protocol) server exposing Bookly capabilities to AI agents vi
 | `purchase_book` | Purchase book (JWT) | transaction-svc |
 | `return_book` | Return rented book (JWT) | transaction-svc |
 | `get_my_library` | User's library (JWT) | transaction-svc |
+| `send_notification` | Send notification/email | notif-svc |
+| `get_notification_history` | User's notification history | notif-svc |
+
+> **Note:** the notification tools were added to support the A2A agent network — agents only talk to services through library-mcp.
 
 ---
 
-## 5. Resilience Patterns
+## 5. A2A (Agent-to-Agent)
+
+Specialized agents that discover each other via **Agent Cards** (`/.well-known/agent.json`) and delegate tasks using **A2A JSON-RPC** (`POST /a2a/tasks/send`) — Google's open A2A pattern applied to the microservices analogy:
+
+| Microservices | Agents with A2A |
+|---------------|-----------------|
+| Cada servicio tiene una responsabilidad | Cada agente tiene una especialidad |
+| Se registran en Consul (service registry) | Se publican con un Agent Card (agent registry) |
+| Se descubren dinámicamente | Se descubren via Agent Cards |
+| Se comunican por HTTP | Se comunican por A2A protocol |
+
+### 5.1 Agent Network
+
+| Agent | Port | Skills | Delegates to |
+|-------|------|--------|--------------|
+| orchestrator-agent | 9000 | process_instruction (NL parsing + delegation) | all other agents |
+| catalog-agent | 9001 | search_books, get_book | library-mcp → catalog-svc |
+| transaction-agent | 9002 | create_rental, purchase_book, return_book, get_my_library | library-mcp → transaction-svc |
+| notification-agent | 9003 | send_notification, get_notification_history | library-mcp → notif-svc |
+
+```
+User: "Buy Dune and notify me"
+  │
+  ▼
+Orchestrator Agent (:9000)
+  │ Discovers agents via Agent Cards (GET /agents)
+  │
+  ├──► Catalog Agent (:9001) — search_books skill
+  │        └──► library-mcp ──► catalog-svc
+  │
+  ├──► Transaction Agent (:9002) — purchase_book skill
+  │        └──► library-mcp ──► transaction-svc
+  │
+  └──► Notification Agent (:9003) — send_notification skill
+           └──► library-mcp ──► notif-svc
+```
+
+### 5.2 How to Test the Demo
+
+```powershell
+# Registry: all discovered Agent Cards
+Invoke-RestMethod http://localhost:9000/agents
+
+# Individual Agent Card
+Invoke-RestMethod http://localhost:9001/.well-known/agent.json
+
+# Login to get a JWT
+$login = Invoke-RestMethod -Method Post http://localhost:8002/auth/login `
+  -ContentType "application/json" -Body '{"email":"test@bookly.io","password":"Test1234!"}'
+
+# Natural-language instruction (Spanish or English)
+Invoke-RestMethod -Method Post http://localhost:9000/orchestrate `
+  -ContentType "application/json" `
+  -Body (@{ instruction = "Buy Dune and notify me"; authToken = $login.access_token } | ConvertTo-Json)
+```
+
+Tested instruction set: `Buy Dune and notify me` (purchase + notification), `renta Foundation` (rental), `devolver Foundation` (return by title), `buscar libros de fantasia` (genre search), `compra The Hobbit y notificame` (purchase + notify). Intent keywords are ES/EN; genres are auto-detected.
+
+### 5.3 A2A Message Example
+
+```json
+// Request
+{"jsonrpc":"2.0","id":"task-1","method":"tasks/send",
+ "params":{"taskId":"task-1","message":{"role":"user",
+           "parts":[{"text":"purchase_book|{\"bookId\":1}"}]}}}
+
+// Response
+{"jsonrpc":"2.0","id":"task-1",
+ "result":{"taskId":"task-1","status":"completed",
+           "artifacts":[{"parts":[{"text":"{\"id\":3,\"bookId\":1,...}"}]}]}}}
+```
+
+## 6. Resilience Patterns
 
 ### 5.1 Circuit Breaker
 
@@ -266,7 +342,7 @@ HALF-OPEN (testing)
 
 ---
 
-## 6. Observability (Structured Logging + Correlation ID)
+## 7. Observability (Structured Logging + Correlation ID)
 
 ### 6.1 Log Format
 
@@ -329,7 +405,7 @@ Each service runs a `CorrelationIdMiddleware` that accepts (or generates) the ID
 
 ---
 
-## 7. Frontend (Angular + Material)
+## 8. Frontend (Angular + Material)
 
 Angular 21 application (standalone components, no NgModules for features) with Angular Material 3 theming, located at the monorepo root `src/`.
 
@@ -361,7 +437,7 @@ All services enable CORS (`origin: true`, `Authorization`/`Content-Type`/`x-corr
 
 ---
 
-## 8. Docker Configuration
+## 9. Docker Configuration
 
 ### 8.1 Dockerfiles
 
@@ -424,7 +500,7 @@ docker compose down -v && docker compose up -d
 
 ---
 
-## 9. Key Decisions
+## 10. Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
@@ -441,7 +517,7 @@ docker compose down -v && docker compose up -d
 
 ---
 
-## 10. Evidence
+## 11. Evidence
 
 A live demonstration of the complete system is available on video: **[Deliveries\Delivery-2\evidence_delivery-2.mp4](evidence_delivery-2.mp4)**.
 
@@ -480,7 +556,7 @@ Invoke-RestMethod http://localhost:8000/mcp/capabilities
 
 ---
 
-## 11. Endpoint Classification
+## 12. Endpoint Classification
 
 | Endpoint | Type |
 |----------|------|
@@ -490,3 +566,4 @@ Invoke-RestMethod http://localhost:8000/mcp/capabilities
 | POST /notifications, GET /notifications* | Internal |
 | POST /books, PUT /books/:id, DELETE /books/:id | Internal |
 | /mcp/tools, /mcp/tools/:name/execute, /mcp/capabilities | Public (JWT passed as tool param for protected tools) |
+

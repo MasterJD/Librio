@@ -31,7 +31,7 @@ export class NotificationsController {
         notificationId: notification?.id,
         userId: createNotificationDto.userId,
         type: createNotificationDto.type,
-        channel: notification?.channel,
+        sentAt: notification?.sentAt,
       },
     });
     return notification;

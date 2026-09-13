@@ -36,7 +36,7 @@ export class RentalsController {
         rentalId: rental?.id,
         userId: req.user.id,
         bookId: createRentalDto.bookId,
-        dueDate: rental?.dueDate,
+        expiresAt: rental?.expiresAt,
       },
     });
     return rental;
